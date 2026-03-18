@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Meteor Dodge Rebuild</title>
+  <style>
+    :root{
+      --bg1:#030712;
+      --bg2:#0b1020;
+      --cyan:#4ff6ff;
+      --pink:#ff4fd8;
+      --yellow:#ffe66d;
+      --orange:#ff9966;
+      --text:#eafcff;
+      --panel:rgba(8,14,28,.72);
+      --border:rgba(79,246,255,.28);
+      --danger:#ff7474;
+      --violet:#9e7bff;
+      --good:#7dffb3;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:none}
+    html,body{
+      margin:0;width:100%;height:100%;overflow:hidden;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(79,246,255,.12), transparent 30%),
+        radial-gradient(circle at 80% 70%, rgba(255,79,216,.10), transparent 28%),
+        linear-gradient(180deg, var(--bg2), var(--bg1));
+      color:var(--text);font-family:Arial, Helvetica, sans-serif;
+    }
+    body{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #frame{
+      position:relative;
+      width:100vw;
+      height:100vh;
+      overflow:hidden;
+    }
+    #app{position:relative;width:100%;height:100%;overflow:hidden}
+    canvas{display:block;width:100%;height:100%}
+
+    @media (min-aspect-ratio: 10/16){
+      #frame{
+        width:min(calc(100vh * 9 / 16), 430px);
+        height:min(100vh, calc((100vw - 32px) * 16 / 9));
+        max-height:100vh;
+        border-radius:28px;
+        box-shadow:0 0 40px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
+      }
+    }
+
+    .hud{
+      position:absolute;top:max(40px, env(safe-area-inset-top));left:10px;right:10px;
+      display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;z-index:5;pointer-events:none;
+    }
+    .card{
+      min-width:0;padding:9px 10px;border-radius:15px;background:var(--panel);
+      border:1px solid var(--border);
+      box-shadow:0 0 16px rgba(79,246,255,.10), inset 0 0 14px rgba(79,246,255,.04);
+      backdrop-filter:blur(6px);
+    }
+    .label{color:var(--cyan);font-size:11px;margin-bottom:4px;letter-spacing:.3px}
+    .value{
+      font-size:clamp(13px,3.3vw,20px);font-weight:700;text-shadow:0 0 10px rgba(79,246,255,.28);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+
+    .effect-banner{
+      position:absolute;top:max(74px, calc(env(safe-area-inset-top) + 74px));left:50%;transform:translateX(-50%);
+      z-index:7;min-width:170px;padding:8px 14px;border-radius:999px;background:rgba(10,18,34,.78);
+      border:1px solid rgba(255,255,255,.15);box-shadow:0 0 16px rgba(255,255,255,.06);
+      text-align:center;font-size:14px;font-weight:700;pointer-events:none;
+    }
+
+    .boss-ui{
+      position:absolute;top:max(116px, calc(env(safe-area-inset-top) + 116px));left:50%;transform:translateX(-50%);
+      width:min(86vw,520px);z-index:7;pointer-events:none;
+    }
+    .boss-warning{
+      text-align:center;margin-bottom:8px;font-size:clamp(18px,4.8vw,30px);font-weight:900;color:#ffd7a8;
+      text-shadow:0 0 14px rgba(255,150,80,.65);opacity:0;transition:opacity .2s ease;
+    }
+    .boss-warning.show{opacity:1}
+    .boss-bar-wrap{
+      display:none;background:rgba(8,12,24,.82);border:1px solid rgba(255,255,255,.14);
+      border-radius:18px;padding:8px;box-shadow:0 0 18px rgba(255,255,255,.08);
+    }
+    .boss-bar-title{text-align:center;font-size:12px;margin-bottom:6px;color:#ffe6d5;letter-spacing:.5px}
+    .boss-bar{height:14px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08)}
+    .boss-health{
+      height:100%;width:100%;border-radius:999px;background:linear-gradient(90deg,#ff8c66,#ff4f8c);
+      box-shadow:0 0 16px rgba(255,90,110,.25);
+    }
+
+    .overlay{
+      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:8;
+    }
+    .menu{
+      width:min(92vw,430px);padding:24px 20px 20px;border-radius:24px;background:rgba(6,10,22,.84);
+      border:1px solid rgba(255,79,216,.24);box-shadow:0 0 30px rgba(255,79,216,.14),0 0 24px rgba(79,246,255,.10);
+      text-align:center;backdrop-filter:blur(8px);
+    }
+    h1{margin:0 0 10px;font-size:clamp(28px,8vw,42px);color:var(--cyan);text-shadow:0 0 14px rgba(79,246,255,.35)}
+    .desc{margin:0 0 14px;line-height:1.55;font-size:14px;color:#d9f8ff;opacity:.95}
+    .status{min-height:24px;margin:6px 0 14px;font-size:16px;font-weight:700;color:#fff}
+    .buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    button{
+      border:none;border-radius:14px;min-width:130px;padding:14px 18px;font-size:16px;font-weight:700;cursor:pointer;
+      color:#071018;background:linear-gradient(135deg,var(--cyan),#95fbff);box-shadow:0 0 18px rgba(79,246,255,.28);
+    }
+    button.secondary{background:linear-gradient(135deg,var(--pink),#ff98eb);box-shadow:0 0 18px rgba(255,79,216,.28)}
+
+    .controls{
+      position:absolute;left:0;right:0;bottom:max(70px, env(safe-area-inset-bottom));height:min(32vh,240px);z-index:6;pointer-events:none;
+    }
+    .fire-zone,.joy-zone{position:absolute;bottom:0;width:50%;height:100%;pointer-events:auto}
+    .fire-zone{left:0}.joy-zone{right:0}
+    .fire-button{
+      position:absolute;left:24px;bottom:70px;width:min(26vw,85px);height:min(26vw,85px);min-width:84px;min-height:84px;
+      border-radius:50%;background:radial-gradient(circle at 35% 30%, #ffd69a, #ff7b57 55%, #b93d2e 100%);
+      box-shadow:0 0 24px rgba(255,120,90,.35), inset 0 0 22px rgba(255,255,255,.16);
+      border:2px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;
+      color:#fff7ef;font-weight:800;font-size:18px;text-shadow:0 0 8px rgba(0,0,0,.25);
+      opacity:.95;transform:scale(1);transition:transform .06s ease, filter .06s ease;
+    }
+    .fire-button.active{transform:scale(.94);filter:brightness(1.15)}
+    .fire-button::after{content:"FIRE"}
+    .joystick-base{
+      position:absolute;right:24px;bottom:70px;width:min(30vw,140px);height:min(30vw,140px);min-width:96px;min-height:96px;
+      border-radius:50%;border:2px solid rgba(79,246,255,.18);background:rgba(255,255,255,.05);
+      box-shadow:inset 0 0 18px rgba(79,246,255,.08),0 0 18px rgba(79,246,255,.10);
+    }
+    .joystick-knob{
+      position:absolute;left:50%;top:50%;width:44%;height:44%;transform:translate(-50%,-50%);border-radius:50%;
+      background:radial-gradient(circle at 30% 30%, #bfffff, #57e9ff 60%, #1ba8c7 100%);
+      box-shadow:0 0 18px rgba(79,246,255,.28), inset 0 0 10px rgba(255,255,255,.18);
+    }
+    
+    .hall-wrap{
+      margin-top:18px;
+      padding:16px 14px 12px;
+      border-radius:20px;
+      background:
+        radial-gradient(circle at top, rgba(255,230,109,.10), transparent 45%),
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      border:1px solid rgba(255,230,109,.18);
+      box-shadow:
+        0 0 22px rgba(255,230,109,.08),
+        inset 0 0 14px rgba(255,255,255,.03);
+    }
+    .hall-title{
+      text-align:center;
+      font-weight:900;
+      letter-spacing:.6px;
+      color:#ffe66d;
+      font-size:18px;
+      margin-bottom:4px;
+      text-shadow:0 0 12px rgba(255,230,109,.25);
+    }
+    .hall-subtitle{
+      text-align:center;
+      font-size:12px;
+      color:#d9f8ff;
+      opacity:.82;
+      margin-bottom:12px;
+    }
+    .hall-podium{
+      display:grid;
+      grid-template-columns:1fr 1.18fr 1fr;
+      gap:10px;
+      align-items:end;
+      margin-top:8px;
+    }
+    .hall-card{
+      position:relative;
+      border-radius:18px;
+      padding:12px 10px 10px;
+      text-align:center;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+      box-shadow:inset 0 0 10px rgba(255,255,255,.02);
+      overflow:hidden;
+    }
+    .hall-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg, rgba(255,255,255,.05), transparent 45%);
+      pointer-events:none;
+    }
+    .hall-card.rank1{
+      min-height:142px;
+      background:
+        radial-gradient(circle at top, rgba(255,230,109,.16), transparent 50%),
+        rgba(255,255,255,.05);
+      border-color:rgba(255,230,109,.28);
+      box-shadow:0 0 20px rgba(255,230,109,.10), inset 0 0 10px rgba(255,255,255,.03);
+    }
+    .hall-card.rank2{
+      min-height:122px;
+      background:
+        radial-gradient(circle at top, rgba(210,220,235,.12), transparent 50%),
+        rgba(255,255,255,.04);
+      border-color:rgba(210,220,235,.24);
+    }
+    .hall-card.rank3{
+      min-height:108px;
+      background:
+        radial-gradient(circle at top, rgba(255,180,120,.12), transparent 50%),
+        rgba(255,255,255,.04);
+      border-color:rgba(255,180,120,.22);
+    }
+    .hall-crown{
+      font-size:22px;
+      margin-bottom:2px;
+      line-height:1;
+    }
+    .hall-rank{
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.4px;
+      margin-bottom:6px;
+      color:#f3fbff;
+    }
+    .hall-score{
+      font-size:20px;
+      font-weight:900;
+      color:#ffffff;
+      text-shadow:0 0 12px rgba(255,255,255,.12);
+      margin-bottom:4px;
+    }
+    .hall-score.small{font-size:17px}
+    .hall-label{
+      font-size:11px;
+      color:#d9f8ff;
+      opacity:.85;
+    }
+    .hall-empty{
+      opacity:.5;
+      font-style:italic;
+    }
+    .hall-footer{
+      margin-top:12px;
+      text-align:center;
+      font-size:11px;
+      color:#d9f8ff;
+      opacity:.72;
+    }
+
+    
+    .ship-select{
+      margin-top:16px;
+      padding:14px 12px 10px;
+      border-radius:18px;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(79,246,255,.12);
+    }
+    .ship-title{
+      text-align:center;
+      font-weight:800;
+      color:#4ff6ff;
+      margin-bottom:10px;
+      font-size:14px;
+    }
+    .ship-grid{
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:10px;
+    }
+    .ship-option{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:10px 8px 8px;
+      background:rgba(255,255,255,.03);
+      cursor:pointer;
+      transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+      text-align:center;
+    }
+    .ship-option.active{
+      border-color:rgba(79,246,255,.55);
+      box-shadow:0 0 16px rgba(79,246,255,.16), inset 0 0 10px rgba(79,246,255,.06);
+      transform:translateY(-1px);
+    }
+    .ship-canvas{
+      width:100%;
+      height:56px;
+      display:block;
+      margin-bottom:6px;
+    }
+    .ship-name{
+      font-size:12px;
+      color:#d9f8ff;
+      font-weight:700;
+    }
+
+    .hidden{display:none !important}
+  </style>
+</head>
+<body>
+<div id="frame">
+<div id="app">
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud">
+    <div class="card"><div class="label">점수</div><div class="value" id="scoreValue">0</div></div>
+    <div class="card"><div class="label">최고 점수</div><div class="value" id="bestValue">0</div></div>
+    <div class="card"><div class="label">난이도</div><div class="value" id="levelValue">1</div></div>
+    <div class="card"><div class="label">상태</div><div class="value" id="effectValue">일반전</div></div>
+    <div class="card"><div class="label">스테이지</div><div class="value" id="stageValue">1</div></div>
+  </div>
+
+  <div class="effect-banner hidden" id="effectBanner">상태</div>
+
+  <div class="boss-ui">
+    <div class="boss-warning" id="bossWarning">⚠ BOSS WARNING ⚠</div>
+    <div class="boss-bar-wrap" id="bossBarWrap">
+      <div class="boss-bar-title" id="bossBarTitle">BOSS</div>
+      <div class="boss-bar"><div class="boss-health" id="bossHealth"></div></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menuWrap">
+    <div class="menu">
+      <h1>Meteor Dodge</h1>
+      <p class="desc">
+        모바일: 왼쪽 발사 버튼 / 오른쪽 조이스틱 이동<br>
+        PC: 방향키 이동 / 스페이스바 발사<br>
+        우주인을 맞추면 점수가 깎입니다.<br>
+        속도 변화 아이템과 멀티샷 버프도 추가되었습니다.
+      </p>
+      <div class="status" id="statusText">게임 시작을 누르면 전투가 시작됩니다.</div>
+      <div class="ship-select">
+        <div class="ship-title">우주선을 선택하세요</div>
+        <div class="ship-grid" id="shipGrid">
+          <div class="ship-option active" data-ship="0">
+            <canvas class="ship-canvas" id="shipPreview0" width="120" height="56"></canvas>
+            <div class="ship-name">Falcon</div>
+          </div>
+          <div class="ship-option" data-ship="1">
+            <canvas class="ship-canvas" id="shipPreview1" width="120" height="56"></canvas>
+            <div class="ship-name">Nova</div>
+          </div>
+          <div class="ship-option" data-ship="2">
+            <canvas class="ship-canvas" id="shipPreview2" width="120" height="56"></canvas>
+            <div class="ship-name">Phantom</div>
+          </div>
+        </div>
+      </div>
+      <div class="buttons">
+        <button id="startBtn">게임 시작</button>
+        <button id="restartBtn" class="secondary hidden">재시작</button>
+      </div>
+      <div id="hallWrap" class="hall-wrap">
+        <div class="hall-title">🏆 명예의 전당 🏆</div>
+        <div class="hall-subtitle">최고의 파일럿 TOP 3</div>
+        <div id="hallList"></div>
+        <div class="hall-footer">오직 상위 3명의 기록만 남습니다</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls hidden" id="controlsWrap">
+    <div class="fire-zone" id="fireZone"><div class="fire-button" id="fireButton"></div></div>
+    <div class="joy-zone" id="joyZone"><div class="joystick-base" id="joyBase"><div class="joystick-knob" id="joyKnob"></div></div></div>
+  </div>
+</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const frame = $("frame");
+  const app = $("app");
+
+  const ui = {
+    score: $("scoreValue"),
+    best: $("bestValue"),
+    level: $("levelValue"),
+    effect: $("effectValue"),
+    stage: $("stageValue"),
+    effectBanner: $("effectBanner"),
+    bossWarning: $("bossWarning"),
+    bossBarWrap: $("bossBarWrap"),
+    bossBarTitle: $("bossBarTitle"),
+    bossHealth: $("bossHealth"),
+    menuWrap: $("menuWrap"),
+    status: $("statusText"),
+    startBtn: $("startBtn"),
+    restartBtn: $("restartBtn"),
+    controlsWrap: $("controlsWrap"),
+    fireZone: $("fireZone"),
+    fireButton: $("fireButton"),
+    joyBase: $("joyBase"),
+    joyKnob: $("joyKnob"),
+    hallList: $("hallList"),
+    shipGrid: $("shipGrid"),
+  };
+
+  const STORAGE_KEY = "meteor_dodge_rebuild_best";
+  const HOF_KEY = "meteor_dodge_rebuild_hof_top3";
+  const SHIP_KEY = "meteor_dodge_selected_ship";
+  let bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+  ui.best.textContent = String(bestScore);
+
+  const state = {
+    w: 0, h: 0, dpr: 1,
+    running: false,
+    mode: "menu",     // menu, playing, warning, clear, gameover
+    phase: "wave",    // wave, boss
+    lastTime: 0,
+    elapsed: 0,
+    score: 0,
+    stage: 1,
+    difficultyLevel: 1,
+    spawnTimer: 0,
+    pickupTimer: 0,
+    astronautTimer: 0,
+    pickupCount: 0,
+    warningTimer: 0,
+    clearTimer: 0,
+    calmTimer: 0,
+    fireCooldown: 0,
+    pointerFiring: false,
+    keyboardFiring: false,
+    joyActive: false,
+    joyPointerId: null,
+    joyCenterX: 0,
+    joyCenterY: 0,
+    joyRadius: 0,
+    joyDx: 0,
+    joyDy: 0,
+    keyboard: { left:false, right:false, up:false, down:false },
+    stars: [],
+    meteors: [],
+    bullets: [],
+    enemyBullets: [],
+    particles: [],
+    pickups: [],
+    astronauts: [],
+    boss: null,
+    selectedShip: Number(localStorage.getItem(SHIP_KEY) || 0),
+    player: {
+      x: 0, y: 0,
+      baseW: 0, baseH: 0,
+      w: 0, h: 0,
+      speed: 0,
+      scale: 1,
+      effectType: "none",
+      effectTimer: 0,
+      speedMultiplier: 1,
+      multishot: 1,
+      multishotTimer: 0
+    }
+  };
+
+  function resize() {
+    state.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    const rect = app.getBoundingClientRect();
+    state.w = Math.max(1, Math.round(rect.width || frame.clientWidth || window.innerWidth));
+    state.h = Math.max(1, Math.round(rect.height || frame.clientHeight || window.innerHeight));
+
+    canvas.width = Math.floor(state.w * state.dpr);
+    canvas.height = Math.floor(state.h * state.dpr);
+    canvas.style.width = state.w + "px";
+    canvas.style.height = state.h + "px";
+
+    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    setupPlayer();
+    buildStars();
+    updateJoystickGeometry();
+  }
+
+
+  function getShipConfig(index) {
+    const configs = [
+      { name: "Falcon", glow: "rgba(79,246,255,.8)", colors: ["#95fbff","#4ff6ff","#1cc5db"], cockpit:"#ff4fd8", accent:"#aafcff", flame:"#ffe66d", type:0 },
+      { name: "Nova", glow: "rgba(255,79,216,.8)", colors: ["#ffd8f4","#ff7fe3","#d63ab2"], cockpit:"#4ff6ff", accent:"#ffc1ef", flame:"#ffe66d", type:1 },
+      { name: "Phantom", glow: "rgba(158,123,255,.85)", colors: ["#d9ccff","#9e7bff","#5e47ca"], cockpit:"#ffe66d", accent:"#cbb8ff", flame:"#7dffb3", type:2 }
+    ];
+    return configs[index] || configs[0];
+  }
+
+  function renderShipPreview(canvasId, shipIndex) {
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    const pctx = c.getContext("2d");
+    pctx.clearRect(0,0,c.width,c.height);
+    drawShipShape(pctx, c.width/2 - 18, 8, 36, 42, getShipConfig(shipIndex), false);
+  }
+
+  function initShipSelector() {
+    renderShipPreview("shipPreview0", 0);
+    renderShipPreview("shipPreview1", 1);
+    renderShipPreview("shipPreview2", 2);
+
+    const options = ui.shipGrid.querySelectorAll(".ship-option");
+    const applyActive = () => {
+      options.forEach(o => o.classList.remove("active"));
+      const current = ui.shipGrid.querySelector(`.ship-option[data-ship="${state.selectedShip}"]`);
+      if (current) current.classList.add("active");
+    };
+
+    applyActive();
+
+    options.forEach((el) => {
+      el.addEventListener("click", () => {
+        state.selectedShip = Number(el.dataset.ship || 0);
+        localStorage.setItem(SHIP_KEY, String(state.selectedShip));
+        applyActive();
+      });
+    });
+  }
+
+  function drawShipShape(targetCtx, x, y, pw, ph, cfg, animated = true) {
+    targetCtx.save();
+    targetCtx.shadowBlur = 22;
+    targetCtx.shadowColor = cfg.glow;
+
+    const bodyGrad = targetCtx.createLinearGradient(x, y, x, y + ph);
+    bodyGrad.addColorStop(0, cfg.colors[0]);
+    bodyGrad.addColorStop(.55, cfg.colors[1]);
+    bodyGrad.addColorStop(1, cfg.colors[2]);
+    targetCtx.fillStyle = bodyGrad;
+
+    if (cfg.type === 0) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw/2, y);
+      targetCtx.lineTo(x + pw, y + ph * .72);
+      targetCtx.lineTo(x + pw * .72, y + ph);
+      targetCtx.lineTo(x + pw * .28, y + ph);
+      targetCtx.lineTo(x, y + ph * .72);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else if (cfg.type === 1) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw/2, y);
+      targetCtx.lineTo(x + pw * .88, y + ph * .30);
+      targetCtx.lineTo(x + pw * .78, y + ph * .9);
+      targetCtx.lineTo(x + pw * .56, y + ph);
+      targetCtx.lineTo(x + pw * .44, y + ph);
+      targetCtx.lineTo(x + pw * .22, y + ph * .9);
+      targetCtx.lineTo(x + pw * .12, y + ph * .30);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw/2, y);
+      targetCtx.lineTo(x + pw * .98, y + ph * .42);
+      targetCtx.lineTo(x + pw * .74, y + ph);
+      targetCtx.lineTo(x + pw * .26, y + ph);
+      targetCtx.lineTo(x + pw * .02, y + ph * .42);
+      targetCtx.closePath();
+      targetCtx.fill();
+    }
+
+    targetCtx.fillStyle = cfg.cockpit;
+    targetCtx.beginPath();
+    targetCtx.ellipse(x + pw/2, y + ph * .4, pw * .17, ph * .14, 0, 0, Math.PI * 2);
+    targetCtx.fill();
+
+    targetCtx.fillStyle = cfg.accent;
+    if (cfg.type === 0) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .18, y + ph * .76);
+      targetCtx.lineTo(x - pw * .12, y + ph * .94);
+      targetCtx.lineTo(x + pw * .22, y + ph * .88);
+      targetCtx.closePath();
+      targetCtx.fill();
+
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .82, y + ph * .76);
+      targetCtx.lineTo(x + pw * 1.12, y + ph * .94);
+      targetCtx.lineTo(x + pw * .78, y + ph * .88);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else if (cfg.type === 1) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .16, y + ph * .46);
+      targetCtx.lineTo(x - pw * .14, y + ph * .58);
+      targetCtx.lineTo(x + pw * .18, y + ph * .68);
+      targetCtx.closePath();
+      targetCtx.fill();
+
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .84, y + ph * .46);
+      targetCtx.lineTo(x + pw * 1.14, y + ph * .58);
+      targetCtx.lineTo(x + pw * .82, y + ph * .68);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else {
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .24, y + ph * .86);
+      targetCtx.lineTo(x - pw * .02, y + ph * .98);
+      targetCtx.lineTo(x + pw * .18, y + ph * .64);
+      targetCtx.closePath();
+      targetCtx.fill();
+
+      targetCtx.beginPath();
+      targetCtx.moveTo(x + pw * .76, y + ph * .86);
+      targetCtx.lineTo(x + pw * 1.02, y + ph * .98);
+      targetCtx.lineTo(x + pw * .82, y + ph * .64);
+      targetCtx.closePath();
+      targetCtx.fill();
+    }
+
+    const flame = ph * (animated ? (.16 + Math.random() * .08) : .18);
+    targetCtx.shadowColor = cfg.flame;
+    targetCtx.fillStyle = cfg.flame;
+    targetCtx.beginPath();
+    targetCtx.moveTo(x + pw * .4, y + ph);
+    targetCtx.lineTo(x + pw * .5, y + ph + flame);
+    targetCtx.lineTo(x + pw * .6, y + ph);
+    targetCtx.closePath();
+    targetCtx.fill();
+
+    targetCtx.restore();
+  }
+
+  function buildStars() {
+    const count = Math.max(50, Math.floor((state.w * state.h) / 11000));
+    state.stars = Array.from({length: count}, () => ({
+      x: Math.random() * state.w,
+      y: Math.random() * state.h,
+      r: Math.random() * 1.7 + 0.4,
+      a: Math.random() * 0.6 + 0.2,
+      s: Math.random() * 18 + 8
+    }));
+  }
+
+  function setupPlayer() {
+    const p = state.player;
+    const oldCenterX = p.x + p.w / 2 || state.w / 2;
+    const oldCenterY = p.y + p.h / 2 || (state.h - 180);
+    p.baseW = Math.max(40, state.w * 0.08);
+    p.baseH = p.baseW * 1.15;
+    applyPlayerScale(p.scale || 1, false);
+    p.x = oldCenterX - p.w / 2;
+    p.y = oldCenterY - p.h / 2;
+    p.speed = Math.max(220, state.w * 0.55);
+    clampPlayer();
+  }
+
+  function applyPlayerScale(scale, updateUIToo = true) {
+    const p = state.player;
+    const cx = p.x + p.w / 2 || state.w / 2;
+    const cy = p.y + p.h / 2 || (state.h - 180);
+    p.scale = scale;
+    p.w = p.baseW * p.scale;
+    p.h = p.baseH * p.scale;
+    p.x = cx - p.w / 2;
+    p.y = cy - p.h / 2;
+    clampPlayer();
+    if (updateUIToo) updateEffectUI();
+  }
+
+  function clampPlayer() {
+    const p = state.player;
+    const minY = Math.max(90, state.h * 0.12);
+    const maxY = state.h - p.h - Math.max(110, state.h * 0.16);
+    p.x = Math.max(0, Math.min(state.w - p.w, p.x));
+    p.y = Math.max(minY, Math.min(maxY, p.y));
+  }
+
+
+  function loadHallOfFame() {
+    try {
+      const raw = localStorage.getItem(HOF_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(v => Number.isFinite(Number(v))).map(v => Math.floor(Number(v))) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveHallOfFame(scores) {
+    localStorage.setItem(HOF_KEY, JSON.stringify(scores.slice(0, 3)));
+  }
+
+  function updateHallOfFame(score) {
+    const scores = loadHallOfFame();
+    scores.push(Math.floor(score));
+    scores.sort((a, b) => b - a);
+    const top3 = scores.slice(0, 3);
+    saveHallOfFame(top3);
+    renderHallOfFame();
+  }
+
+
+  function renderHallOfFame() {
+    const scores = loadHallOfFame();
+    const slots = [
+      { rank: 2, emoji: "🥈", cls: "rank2", score: scores[1] },
+      { rank: 1, emoji: "👑", cls: "rank1", score: scores[0] },
+      { rank: 3, emoji: "🥉", cls: "rank3", score: scores[2] }
+    ];
+
+    ui.hallList.innerHTML = `
+      <div class="hall-podium">
+        ${slots.map(slot => `
+          <div class="hall-card ${slot.cls}">
+            <div class="hall-crown">${slot.emoji}</div>
+            <div class="hall-rank">${slot.rank}위</div>
+            <div class="hall-score ${slot.rank === 1 ? "" : "small"} ${slot.score === undefined ? "hall-empty" : ""}">
+              ${slot.score !== undefined ? slot.score.toLocaleString() : "---"}
+            </div>
+            <div class="hall-label">${slot.score !== undefined ? "POINTS" : "기록 없음"}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function resetGame() {
+    Object.assign(state, {
+      running: true,
+      mode: "playing",
+      phase: "wave",
+      elapsed: 0,
+      score: 0,
+      stage: 1,
+      difficultyLevel: 1,
+      spawnTimer: 0,
+      pickupTimer: 0,
+      astronautTimer: 0,
+      pickupCount: 0,
+      warningTimer: 0,
+      clearTimer: 0,
+      calmTimer: 0,
+      fireCooldown: 0,
+      pointerFiring: false,
+      keyboardFiring: false,
+      joyActive: false,
+      joyPointerId: null,
+      joyDx: 0,
+      joyDy: 0,
+      meteors: [],
+      bullets: [],
+      enemyBullets: [],
+      particles: [],
+      pickups: [],
+      astronauts: [],
+      boss: null,
+    selectedShip: Number(localStorage.getItem(SHIP_KEY) || 0),
+    });
+    state.keyboard.left = state.keyboard.right = state.keyboard.up = state.keyboard.down = false;
+    state.player.effectType = "none";
+    state.player.effectTimer = 0;
+    state.player.scale = 1;
+    state.player.speedMultiplier = 1;
+    state.player.multishot = 1;
+    state.player.multishotTimer = 0;
+    setupPlayer();
+    setKnob(0, 0);
+    ui.fireButton.classList.remove("active");
+    ui.score.textContent = "0";
+    ui.level.textContent = "1";
+    ui.stage.textContent = "1";
+    ui.bossWarning.classList.remove("show");
+    updateBossUI();
+    updateEffectUI();
+  }
+
+  function startGame() {
+    resetGame();
+    const current = ui.shipGrid.querySelector(`.ship-option[data-ship="${state.selectedShip}"]`);
+    if (current) {
+      ui.shipGrid.querySelectorAll(".ship-option").forEach(o => o.classList.remove("active"));
+      current.classList.add("active");
+    }
+    ui.menuWrap.classList.add("hidden");
+    ui.controlsWrap.classList.remove("hidden");
+    ui.restartBtn.classList.add("hidden");
+    state.lastTime = performance.now();
+    if (state.animationId) cancelAnimationFrame(state.animationId);
+    state.animationId = requestAnimationFrame(loop);
+  }
+
+  function gameOver() {
+    if (state.mode === "gameover") return;
+    state.mode = "gameover";
+    state.running = false;
+    ui.controlsWrap.classList.add("hidden");
+    ui.menuWrap.classList.remove("hidden");
+    ui.restartBtn.classList.remove("hidden");
+    ui.effectBanner.classList.add("hidden");
+    ui.bossWarning.classList.remove("show");
+    updateBossUI();
+    state.pointerFiring = false;
+    state.keyboardFiring = false;
+    ui.fireButton.classList.remove("active");
+    ui.status.textContent = `게임 오버! 점수: ${Math.floor(state.score)} / 스테이지 ${state.stage}`;
+    if (state.score > bestScore) {
+      bestScore = Math.floor(state.score);
+      localStorage.setItem(STORAGE_KEY, String(bestScore));
+      ui.best.textContent = String(bestScore);
+    }
+    updateHallOfFame(state.score);
+  }
+
+  function updateEffectUI() {
+    let txt = "일반전";
+    if (state.mode === "warning") txt = "보스 경고";
+    else if (state.phase === "boss" && state.boss) txt = "보스전";
+    else if (state.mode === "clear") txt = `스테이지 ${state.stage} 클리어`;
+    else if (state.player.effectType === "shrink") txt = `작아짐 ${state.player.effectTimer.toFixed(1)}s`;
+    else if (state.player.effectType === "grow") txt = `커짐 ${state.player.effectTimer.toFixed(1)}s`;
+    else if (state.player.effectType === "speedUp") txt = `가속 ${state.player.effectTimer.toFixed(1)}s`;
+    else if (state.player.effectType === "slowDown") txt = `감속 ${state.player.effectTimer.toFixed(1)}s`;
+    else if (state.player.effectType === "multishot") txt = `${state.player.multishot}발 멀티샷 ${state.player.effectTimer.toFixed(1)}s`;
+    else if (state.calmTimer > 0) txt = `완화 구간 ${state.calmTimer.toFixed(1)}s`;
+    ui.effect.textContent = txt;
+
+    if (state.mode === "clear") {
+      ui.effectBanner.textContent = `STAGE ${state.stage} CLEAR`;
+      ui.effectBanner.classList.remove("hidden");
+    } else if (state.mode === "warning") {
+      ui.effectBanner.textContent = "보스 접근 중";
+      ui.effectBanner.classList.remove("hidden");
+    } else if (state.player.effectType !== "none") {
+      ui.effectBanner.textContent = txt;
+      ui.effectBanner.classList.remove("hidden");
+    } else {
+      ui.effectBanner.classList.add("hidden");
+    }
+  }
+
+  function updateBossUI() {
+    const b = state.boss;
+    if (!b) {
+      ui.bossBarWrap.style.display = "none";
+      return;
+    }
+    ui.bossBarWrap.style.display = "block";
+    ui.bossBarTitle.textContent = `${b.name} · STAGE ${state.stage}`;
+    ui.bossHealth.style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+  }
+
+  function getBossThreshold(stage) {
+    if (stage === 1) return 1500;
+    if (stage === 2) return 5000;
+    if (stage === 3) return 10000;
+    return 10000 + (stage - 3) * 6000;
+  }
+
+  function getDifficulty() {
+    const calmFactor = state.calmTimer > 0 ? (state.calmTimer / 8) : 0;
+    const level = 1 + Math.floor(state.elapsed / 12);
+    return {
+      level,
+      spawnInterval: Math.max(0.35, 0.88 - state.elapsed * 0.012 - state.stage * 0.03 + calmFactor * 0.18),
+      meteorSpeed: Math.min(420, 160 + state.elapsed * 7.5 + state.stage * 24 - calmFactor * 70),
+      drift: Math.min(90, Math.max(8, 18 + state.elapsed * 1.8 + state.stage * 3 - calmFactor * 10)),
+      meteorHp: Math.max(1, Math.min(3, 1 + Math.floor(state.elapsed / 18) + Math.floor(state.stage / 2) - (calmFactor > 0.35 ? 1 : 0))),
+      scoreRate: 8 + state.elapsed * 0.8 + state.stage * 1.3,
+      burstChance: Math.max(0.03, Math.min(0.35, state.elapsed * 0.008 + state.stage * 0.02 - calmFactor * 0.12)),
+      fireDelay: Math.max(0.11, 0.22 - state.elapsed * 0.0015 - state.stage * 0.003),
+      pickupDelay: Math.max(5.5, 11 - state.elapsed * 0.10 - state.stage * 0.25),
+      astronautDelayMin: 7,
+      astronautDelayMax: 12
+    };
+  }
+
+  function bossTemplate(stageNo) {
+    const idx = (stageNo - 1) % 3;
+    if (idx === 0) {
+      return {
+        name: "Giant Meteor",
+        color1: "#ffd0a8", color2: "#ff9966",
+        r: Math.min(80 + stageNo * 4, 118),
+        hp: 26 + stageNo * 10,
+        speed: 110 + stageNo * 6,
+        pattern: "side",
+        shotDelay: Math.max(0.95, 1.5 - stageNo * 0.05),
+        summonDelay: Math.max(2.2, 3.6 - stageNo * 0.08),
+        burstDelay: 2.8
+      };
+    }
+    if (idx === 1) {
+      return {
+        name: "Crystal Asteroid",
+        color1: "#e5d8ff", color2: "#9e7bff",
+        r: Math.min(74 + stageNo * 3, 108),
+        hp: 30 + stageNo * 12,
+        speed: 125 + stageNo * 6,
+        pattern: "zigzag",
+        shotDelay: Math.max(0.85, 1.3 - stageNo * 0.04),
+        summonDelay: Math.max(2.0, 3.1 - stageNo * 0.07),
+        burstDelay: 2.3
+      };
+    }
+    return {
+      name: "Alien Core",
+      color1: "#c7fff5", color2: "#35d8c4",
+      r: Math.min(70 + stageNo * 3, 102),
+      hp: 34 + stageNo * 14,
+      speed: 135 + stageNo * 7,
+      pattern: "hover",
+      shotDelay: Math.max(0.72, 1.15 - stageNo * 0.04),
+      summonDelay: Math.max(1.9, 2.9 - stageNo * 0.06),
+      burstDelay: 2.0
+    };
+  }
+
+  function startBossWarning() {
+    if (state.mode !== "playing" || state.phase !== "wave") return;
+    state.mode = "warning";
+    state.phase = "boss";
+    state.warningTimer = 3.0;
+    state.meteors = [];
+    state.enemyBullets = [];
+    ui.bossWarning.classList.add("show");
+    updateEffectUI();
+  }
+
+  function spawnBoss() {
+    const t = bossTemplate(state.stage);
+    state.boss = {
+      ...t,
+      maxHp: t.hp,
+      x: state.w / 2,
+      y: 130,
+      vx: t.speed,
+      angle: 0,
+      shotTimer: 0,
+      summonTimer: 0,
+      burstTimer: 0
+    };
+    state.mode = "playing";
+    state.phase = "boss";
+    ui.bossWarning.classList.remove("show");
+    updateBossUI();
+    updateEffectUI();
+  }
+
+  function startStageClear() {
+    state.mode = "clear";
+    state.phase = "wave";
+    state.clearTimer = 1.8;
+    state.boss = null;
+    state.enemyBullets = [];
+    state.meteors = [];
+    ui.bossWarning.classList.remove("show");
+    updateBossUI();
+    updateEffectUI();
+  }
+
+  function advanceStage() {
+    state.stage += 1;
+    state.calmTimer = 8;
+    state.mode = "playing";
+    state.phase = "wave";
+    state.enemyBullets = [];
+    state.meteors = [];
+    state.pickups = [];
+    state.astronauts = [];
+    ui.stage.textContent = String(state.stage);
+    updateEffectUI();
+  }
+
+  function spawnMeteor(fromBoss = false, bossX = state.w / 2, bossY = 100) {
+    const diff = getDifficulty();
+    const count = fromBoss ? 1 : (Math.random() < diff.burstChance ? 2 : 1);
+
+    for (let i = 0; i < count; i++) {
+      const r = Math.max(14, Math.random() * (state.w * 0.026) + state.w * 0.02);
+      const hp = Math.max(1, diff.meteorHp - (Math.random() < 0.5 ? 1 : 0));
+      state.meteors.push({
+        x: fromBoss ? bossX + (Math.random() - 0.5) * 90 : Math.random() * (state.w - r * 2) + r,
+        y: fromBoss ? bossY + 20 : -r - Math.random() * 80,
+        r,
+        hitR: r * 0.78,
+        hp,
+        maxHp: hp,
+        vy: fromBoss ? 220 + state.stage * 10 : diff.meteorSpeed * (0.72 + Math.random() * 0.4),
+        vx: fromBoss ? (Math.random() - 0.5) * 40 : (Math.random() - 0.5) * diff.drift,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 4.5,
+        glow: Math.random() * 0.35 + 0.65
+      });
+    }
+  }
+
+  function spawnPickup() {
+    state.pickupCount += 1;
+
+    let type = "shrink";
+
+    // 멀티샷은 너무 안 보이지 않도록 3번째, 6번째, 9번째... 아이템마다 확정 등장
+    if (state.pickupCount % 3 === 0) {
+      type = "multishot";
+    } else {
+      const types = ["shrink", "grow", "speedUp", "slowDown", "multishot"];
+      const weights = [0.20, 0.16, 0.18, 0.16, 0.30];
+      let rand = Math.random();
+      let acc = 0;
+      for (let i = 0; i < types.length; i++) {
+        acc += weights[i];
+        if (rand <= acc) {
+          type = types[i];
+          break;
+        }
+      }
+    }
+
+    const r = Math.max(14, state.w * 0.025);
+    state.pickups.push({
+      x: Math.random() * (state.w - r * 2) + r,
+      y: -r - 20,
+      r, type,
+      vy: 180 + Math.random() * 80,
+      rot: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 3
+    });
+  }
+
+  function spawnAstronaut() {
+    state.astronauts.push({
+      x: Math.random() * (state.w - 40) + 20,
+      y: -40,
+      r: 16,
+      vy: 120 + Math.random() * 40,
+      sway: Math.random() * Math.PI * 2
+    });
+  }
+
+  function shoot() {
+    const p = state.player;
+    const cx = p.x + p.w / 2;
+    const y = p.y - 4;
+    const bulletR = Math.max(4, p.w * 0.09);
+    const spread = Math.max(14, p.w * 0.4);
+    if (p.multishot === 1) {
+      state.bullets.push({ x: cx, y, vy: -720, r: bulletR });
+    } else if (p.multishot === 2) {
+      state.bullets.push({ x: cx - spread * 0.5, y, vy: -720, r: bulletR });
+      state.bullets.push({ x: cx + spread * 0.5, y, vy: -720, r: bulletR });
+    } else {
+      state.bullets.push({ x: cx, y, vy: -740, r: bulletR });
+      state.bullets.push({ x: cx - spread, y, vy: -720, r: bulletR });
+      state.bullets.push({ x: cx + spread, y, vy: -720, r: bulletR });
+    }
+    createBurst(cx, y, "#4ff6ff", 3 + p.multishot, 90);
+  }
+
+  function createEnemyBullet(x, y, tx, ty, speed = 240, size = 7, color = "#ff78b8") {
+    const dx = tx - x;
+    const dy = ty - y;
+    const len = Math.hypot(dx, dy) || 1;
+    state.enemyBullets.push({
+      x, y,
+      vx: dx / len * speed,
+      vy: dy / len * speed,
+      r: size,
+      color
+    });
+  }
+
+  function bossAttack(dt) {
+    const b = state.boss;
+    if (!b) return;
+
+    if (b.pattern === "side") {
+      b.x += b.vx * dt;
+      if (b.x < b.r + 20 || b.x > state.w - b.r - 20) b.vx *= -1;
+    } else if (b.pattern === "zigzag") {
+      b.x += b.vx * dt;
+      b.angle += dt * 3.2;
+      b.y = 125 + Math.sin(b.angle) * 22;
+      if (b.x < b.r + 20 || b.x > state.w - b.r - 20) b.vx *= -1;
+    } else {
+      b.angle += dt * 2.2;
+      b.x = state.w / 2 + Math.sin(b.angle) * Math.min(140, state.w * 0.22);
+      b.y = 120 + Math.cos(b.angle * 1.5) * 18;
+    }
+
+    b.shotTimer += dt;
+    b.summonTimer += dt;
+    b.burstTimer += dt;
+
+    if (b.shotTimer >= b.shotDelay) {
+      b.shotTimer = 0;
+      const p = state.player;
+      createEnemyBullet(b.x, b.y + b.r * 0.35, p.x + p.w / 2, p.y + p.h * 0.4, 220 + state.stage * 6, 8, "#ff78b8");
+      if (state.stage >= 3) {
+        createEnemyBullet(b.x - b.r * 0.18, b.y + b.r * 0.4, p.x + p.w/2 - 60, p.y, 205 + state.stage * 5, 7, "#ffd06a");
+        createEnemyBullet(b.x + b.r * 0.18, b.y + b.r * 0.4, p.x + p.w/2 + 60, p.y, 205 + state.stage * 5, 7, "#ffd06a");
+      }
+    }
+
+    if (state.stage >= 2 && b.burstTimer >= b.burstDelay) {
+      b.burstTimer = 0;
+      const amount = Math.min(10, 5 + state.stage);
+      for (let i = 0; i < amount; i++) {
+        const a = (Math.PI * 2 / amount) * i;
+        state.enemyBullets.push({
+          x: b.x, y: b.y,
+          vx: Math.cos(a) * (120 + state.stage * 7),
+          vy: Math.sin(a) * (120 + state.stage * 7),
+          r: 6,
+          color: b.pattern === "zigzag" ? "#9e7bff" : "#ff9e66"
+        });
+      }
+    }
+
+    if (b.summonTimer >= b.summonDelay) {
+      b.summonTimer = 0;
+      spawnMeteor(true, b.x, b.y + b.r * 0.55);
+    }
+  }
+
+  function createBurst(x, y, color, count = 16, force = 180) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * force + force * 0.2;
+      state.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: Math.random() * 0.55 + 0.25,
+        maxLife: Math.random() * 0.55 + 0.25,
+        size: Math.random() * 4 + 2,
+        color
+      });
+    }
+  }
+
+  function circleCircleCollision(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    const rr = r1 + r2;
+    return dx * dx + dy * dy <= rr * rr;
+  }
+
+  function getPlayerHitCircles() {
+    const p = state.player;
+    const x = p.x, y = p.y, pw = p.w, ph = p.h;
+    return [
+      { x: x + pw * 0.5, y: y + ph * 0.32, r: Math.min(pw, ph) * 0.16 },
+      { x: x + pw * 0.34, y: y + ph * 0.66, r: Math.min(pw, ph) * 0.18 },
+      { x: x + pw * 0.66, y: y + ph * 0.66, r: Math.min(pw, ph) * 0.18 }
+    ];
+  }
+
+  function meteorHitsPlayer(m) {
+    const circles = getPlayerHitCircles();
+    for (const c of circles) {
+      if (circleCircleCollision(m.x, m.y, m.hitR, c.x, c.y, c.r)) return true;
+    }
+    return false;
+  }
+
+  function bulletHitsPlayer(b) {
+    const circles = getPlayerHitCircles();
+    for (const c of circles) {
+      if (circleCircleCollision(b.x, b.y, b.r, c.x, c.y, c.r * 1.05)) return true;
+    }
+    return false;
+  }
+
+  function pickupHitsPlayer(pickup) {
+    const circles = getPlayerHitCircles();
+    for (const c of circles) {
+      if (circleCircleCollision(pickup.x, pickup.y, pickup.r * 0.75, c.x, c.y, c.r * 1.15)) return true;
+    }
+    return false;
+  }
+
+  function applyPickup(type) {
+    const p = state.player;
+    p.effectTimer = 8;
+
+    if (type === "shrink") {
+      p.effectType = "shrink";
+      p.speedMultiplier = 1;
+      applyPlayerScale(0.72);
+      createBurst(p.x + p.w / 2, p.y + p.h / 2, "#4ff6ff", 18, 180);
+    } else if (type === "grow") {
+      p.effectType = "grow";
+      p.speedMultiplier = 1;
+      applyPlayerScale(1.35);
+      createBurst(p.x + p.w / 2, p.y + p.h / 2, "#9e7bff", 18, 180);
+    } else if (type === "speedUp") {
+      p.effectType = "speedUp";
+      p.speedMultiplier = 1.45;
+      applyPlayerScale(1);
+      createBurst(p.x + p.w / 2, p.y + p.h / 2, "#ffe66d", 18, 180);
+    } else if (type === "slowDown") {
+      p.effectType = "slowDown";
+      p.speedMultiplier = 0.7;
+      applyPlayerScale(1);
+      createBurst(p.x + p.w / 2, p.y + p.h / 2, "#7dffb3", 18, 180);
+    } else if (type === "multishot") {
+      p.effectType = "multishot";
+      p.speedMultiplier = 1;
+      applyPlayerScale(1);
+      p.multishot = state.stage >= 4 ? 3 : 2;
+      p.multishotTimer = 10;
+      p.effectTimer = 10;
+      createBurst(p.x + p.w / 2, p.y + p.h / 2, "#ff4fd8", 22, 180);
+    }
+    updateEffectUI();
+  }
+
+  function update(dt) {
+    if (state.mode === "gameover" || state.mode === "menu") return;
+
+    if (state.mode === "warning") {
+      updateWorld(dt, false);
+      state.warningTimer -= dt;
+      if (state.warningTimer <= 0) spawnBoss();
+      return;
+    }
+
+    if (state.mode === "clear") {
+      updateWorld(dt, false);
+      state.clearTimer -= dt;
+      if (state.clearTimer <= 0) advanceStage();
+      return;
+    }
+
+    state.elapsed += dt;
+    if (state.calmTimer > 0) state.calmTimer = Math.max(0, state.calmTimer - dt);
+
+    const diff = getDifficulty();
+    state.difficultyLevel = diff.level;
+    ui.level.textContent = String(diff.level);
+    ui.stage.textContent = String(state.stage);
+
+    const inputX = Math.max(-1, Math.min(1, state.joyDx + (state.keyboard.left ? -1 : 0) + (state.keyboard.right ? 1 : 0)));
+    const inputY = Math.max(-1, Math.min(1, state.joyDy + (state.keyboard.up ? -1 : 0) + (state.keyboard.down ? 1 : 0)));
+    state.player.x += inputX * state.player.speed * state.player.speedMultiplier * dt;
+    state.player.y += inputY * state.player.speed * state.player.speedMultiplier * dt;
+    clampPlayer();
+
+    if (state.player.effectType !== "none") {
+      state.player.effectTimer -= dt;
+      if (state.player.multishot > 1) {
+        state.player.multishotTimer = Math.max(0, state.player.multishotTimer - dt);
+      }
+      if (state.player.effectTimer <= 0) {
+        state.player.effectType = "none";
+        state.player.effectTimer = 0;
+        state.player.speedMultiplier = 1;
+        state.player.multishot = 1;
+        state.player.multishotTimer = 0;
+        applyPlayerScale(1);
+      }
+    }
+    updateEffectUI();
+
+    state.fireCooldown -= dt;
+    if ((state.pointerFiring || state.keyboardFiring) && state.fireCooldown <= 0) {
+      shoot();
+      state.fireCooldown = diff.fireDelay;
+    }
+
+    if (state.phase === "wave") {
+      state.spawnTimer += dt;
+      if (state.spawnTimer >= diff.spawnInterval) {
+        state.spawnTimer = 0;
+        spawnMeteor();
+      }
+
+      state.pickupTimer += dt;
+      if (state.pickupTimer >= diff.pickupDelay) {
+        state.pickupTimer = 0;
+        spawnPickup();
+      }
+
+      state.astronautTimer += dt;
+      const astronautDelay = diff.astronautDelayMin + Math.random() * (diff.astronautDelayMax - diff.astronautDelayMin);
+      if (state.astronautTimer >= astronautDelay) {
+        state.astronautTimer = 0;
+        spawnAstronaut();
+      }
+
+      if (state.score >= getBossThreshold(state.stage)) {
+        startBossWarning();
+      }
+    } else if (state.phase === "boss") {
+      bossAttack(dt);
+      updateBossUI();
+    }
+
+    updateWorld(dt, true);
+
+    if (state.boss) {
+      if (meteorHitsPlayer({x: state.boss.x, y: state.boss.y, hitR: state.boss.r * 0.75})) {
+        createBurst(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff7474", 30, 220);
+        gameOver();
+        return;
+      }
+
+      for (let j = state.bullets.length - 1; j >= 0; j--) {
+        const b = state.bullets[j];
+        if (!state.boss) break;
+        if (circleCircleCollision(state.boss.x, state.boss.y, state.boss.r * 0.82, b.x, b.y, b.r)) {
+          state.bullets.splice(j, 1);
+          state.boss.hp -= 1;
+          createBurst(b.x, b.y, "#ffe66d", 6, 120);
+
+          if (state.boss && state.boss.hp <= 0) {
+            createBurst(state.boss.x, state.boss.y, "#ff9966", 40, 260);
+            state.score += 600 + state.stage * 120;
+            startStageClear();
+            break;
+          }
+          updateBossUI();
+        }
+      }
+    }
+
+    state.score += diff.scoreRate * dt;
+    if (state.score < 0) state.score = 0;
+    ui.score.textContent = String(Math.floor(state.score));
+  }
+
+  function updateWorld(dt, doCollisions) {
+    for (const s of state.stars) {
+      s.y += s.s * dt;
+      if (s.y > state.h) { s.y = -2; s.x = Math.random() * state.w; }
+    }
+
+    for (let i = state.bullets.length - 1; i >= 0; i--) {
+      const b = state.bullets[i];
+      b.y += b.vy * dt;
+      if (b.y + b.r < -10) state.bullets.splice(i, 1);
+    }
+
+    for (let i = state.enemyBullets.length - 1; i >= 0; i--) {
+      const b = state.enemyBullets[i];
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.x < -30 || b.x > state.w + 30 || b.y < -30 || b.y > state.h + 30) {
+        state.enemyBullets.splice(i, 1);
+        continue;
+      }
+      if (doCollisions && bulletHitsPlayer(b)) {
+        createBurst(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff7474", 22, 200);
+        gameOver();
+        return;
+      }
+    }
+
+    for (let i = state.pickups.length - 1; i >= 0; i--) {
+      const p = state.pickups[i];
+      p.y += p.vy * dt;
+      p.rot += p.rotSpeed * dt;
+      if (p.y - p.r > state.h + 20) {
+        state.pickups.splice(i, 1);
+        continue;
+      }
+      if (doCollisions && pickupHitsPlayer(p)) {
+        applyPickup(p.type);
+        state.score += 20;
+        state.pickups.splice(i, 1);
+      }
+    }
+
+    for (let i = state.astronauts.length - 1; i >= 0; i--) {
+      const a = state.astronauts[i];
+      a.sway += dt * 2.4;
+      a.x += Math.sin(a.sway) * 18 * dt;
+      a.y += a.vy * dt;
+      if (a.y - a.r > state.h + 40) {
+        state.astronauts.splice(i, 1);
+        continue;
+      }
+
+      for (let j = state.bullets.length - 1; j >= 0; j--) {
+        const b = state.bullets[j];
+        if (circleCircleCollision(a.x, a.y, a.r, b.x, b.y, b.r)) {
+          state.bullets.splice(j, 1);
+          state.astronauts.splice(i, 1);
+          state.score = Math.max(0, state.score - 200);
+          createBurst(a.x, a.y, "#ffffff", 10, 120);
+          break;
+        }
+      }
+    }
+
+    for (let i = state.meteors.length - 1; i >= 0; i--) {
+      const m = state.meteors[i];
+      m.y += m.vy * dt;
+      m.x += m.vx * dt;
+      m.rot += m.rotSpeed * dt;
+
+      if (m.x - m.r < 0 || m.x + m.r > state.w) m.vx *= -1;
+      if (m.y - m.r > state.h + 40) {
+        state.meteors.splice(i, 1);
+        continue;
+      }
+
+      if (doCollisions && meteorHitsPlayer(m)) {
+        createBurst(state.player.x + state.player.w / 2, state.player.y + state.player.h / 2, "#ff7474", 30, 220);
+        gameOver();
+        return;
+      }
+
+      for (let j = state.bullets.length - 1; j >= 0; j--) {
+        const b = state.bullets[j];
+        if (circleCircleCollision(m.x, m.y, m.hitR, b.x, b.y, b.r)) {
+          state.bullets.splice(j, 1);
+          m.hp -= 1;
+          createBurst(b.x, b.y, "#ffe66d", 6, 120);
+          if (m.hp <= 0) {
+            createBurst(m.x, m.y, "#ff9966", 20, 220);
+            state.meteors.splice(i, 1);
+            state.score += 30 + m.maxHp * 10;
+          }
+          break;
+        }
+      }
+    }
+
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+  }
+
+  function drawBackground() {
+    const grad = ctx.createRadialGradient(state.w/2, state.h*0.24, 20, state.w/2, state.h*0.48, Math.max(state.w,state.h)*0.65);
+    grad.addColorStop(0, "rgba(79,246,255,.12)");
+    grad.addColorStop(.45, "rgba(255,79,216,.08)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,state.w,state.h);
+    for (const s of state.stars) {
+      ctx.save();
+      ctx.globalAlpha = s.a;
+      ctx.fillStyle = "#ddfcff";
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawPlayer() {
+    const p = state.player;
+    const cfg = getShipConfig(state.selectedShip);
+    drawShipShape(ctx, p.x, p.y, p.w, p.h, cfg, true);
+  }
+
+  function drawMeteor(m) {
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(m.rot);
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = `rgba(255,140,90,${m.glow})`;
+    const g = ctx.createRadialGradient(0, 0, m.r * .2, 0, 0, m.r);
+    g.addColorStop(0, "#ffd0a8");
+    g.addColorStop(.35, "#ff9966");
+    g.addColorStop(1, "#6e7588");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (Math.PI * 2 / 10) * i;
+      const rr = m.r * (0.82 + Math.sin(i * 1.9 + m.rot) * 0.13 + 0.03);
+      const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(80,90,110,.9)";
+    ctx.beginPath(); ctx.arc(-m.r * .24, m.r * .16, m.r * .16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,180,120,.95)";
+    ctx.beginPath(); ctx.arc(m.r * .16, -m.r * .08, m.r * .22, 0, Math.PI * 2); ctx.fill();
+
+    if (m.maxHp > 1) {
+      ctx.fillStyle = "rgba(255,255,255,.9)";
+      ctx.font = `bold ${Math.max(12, m.r * 0.7)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(m.hp), 0, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawBoss() {
+    const b = state.boss;
+    if (!b) return;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate((b.angle || 0) * 0.6);
+    ctx.shadowBlur = 26;
+    ctx.shadowColor = b.color2;
+    const g = ctx.createRadialGradient(0, 0, b.r * 0.18, 0, 0, b.r);
+    g.addColorStop(0, b.color1);
+    g.addColorStop(.45, b.color2);
+    g.addColorStop(1, "#4a5366");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = (Math.PI * 2 / 12) * i;
+      const rr = b.r * (0.82 + Math.sin(i * 2.1 + (b.angle || 0)) * 0.12 + 0.04);
+      const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.beginPath();
+    ctx.arc(-b.r * 0.16, -b.r * 0.1, b.r * 0.12, 0, Math.PI * 2);
+    ctx.arc(b.r * 0.16, -b.r * 0.1, b.r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(20,10,30,.85)";
+    ctx.beginPath();
+    ctx.arc(-b.r * 0.16, -b.r * 0.1, b.r * 0.05, 0, Math.PI * 2);
+    ctx.arc(b.r * 0.16, -b.r * 0.1, b.r * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255,220,220,.85)";
+    ctx.lineWidth = Math.max(2, b.r * 0.04);
+    ctx.beginPath();
+    ctx.arc(0, b.r * 0.1, b.r * 0.18, 0.2, Math.PI - 0.2, false);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPickup(p) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+
+    let color = "#4ff6ff";
+    let symbol = "-";
+    if (p.type === "grow") { color = "#9e7bff"; symbol = "+"; }
+    if (p.type === "speedUp") { color = "#ffe66d"; symbol = ">>"; }
+    if (p.type === "slowDown") { color = "#7dffb3"; symbol = "<<"; }
+    if (p.type === "multishot") { color = "#ff4fd8"; symbol = state.stage >= 4 ? "3x" : "2x"; }
+
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 2 * i + Math.PI / 4;
+      const rr = p.r * (i % 2 === 0 ? 1 : 0.6);
+      const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    ctx.font = `bold ${Math.max(11, p.r * 0.75)}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(symbol, 0, 1);
+    ctx.restore();
+  }
+
+  function drawAstronaut(a) {
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = "rgba(255,255,255,.5)";
+
+    ctx.strokeStyle = "#8fd3ff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, -8, 9, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(0, -8, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#cfd6de";
+    ctx.fillRect(-5, 0, 10, 14);
+
+    ctx.strokeStyle = "#cfd6de";
+    ctx.beginPath();
+    ctx.moveTo(-5, 4); ctx.lineTo(-10, 8);
+    ctx.moveTo(5, 4); ctx.lineTo(10, 8);
+    ctx.moveTo(-2, 14); ctx.lineTo(-5, 20);
+    ctx.moveTo(2, 14); ctx.lineTo(5, 20);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBullets() {
+    for (const b of state.bullets) {
+      ctx.save();
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = "#4ff6ff";
+      const g = ctx.createLinearGradient(b.x, b.y - 18, b.x, b.y + 18);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(.45, "#4ff6ff");
+      g.addColorStop(1, "#1ba8c7");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.roundRect(b.x - b.r * 0.7, b.y - 14, b.r * 1.4, 22, 6);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawEnemyBullets() {
+    for (const b of state.enemyBullets) {
+      ctx.save();
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = b.color;
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawParticles() {
+    for (const p of state.particles) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, state.w, state.h);
+    drawBackground();
+    drawBullets();
+    drawEnemyBullets();
+    for (const p of state.pickups) drawPickup(p);
+    for (const a of state.astronauts) drawAstronaut(a);
+    for (const m of state.meteors) drawMeteor(m);
+    drawBoss();
+    drawPlayer();
+    drawParticles();
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0);
+    state.lastTime = now;
+    update(dt);
+    render();
+    if (state.running || state.mode === "warning" || state.mode === "clear" || state.mode === "playing") {
+      if (state.mode !== "gameover" && state.mode !== "menu") {
+        state.animationId = requestAnimationFrame(loop);
+      }
+    }
+  }
+
+  function updateJoystickGeometry() {
+    const rect = ui.joyBase.getBoundingClientRect();
+    state.joyCenterX = rect.left + rect.width / 2;
+    state.joyCenterY = rect.top + rect.height / 2;
+    state.joyRadius = rect.width * 0.32;
+    if (!state.joyActive) setKnob(0, 0);
+  }
+
+  function setKnob(nx, ny) {
+    ui.joyKnob.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+  }
+
+  function updateJoystick(clientX, clientY) {
+    const dx = clientX - state.joyCenterX;
+    const dy = clientY - state.joyCenterY;
+    const dist = Math.hypot(dx, dy) || 1;
+    const max = state.joyRadius;
+    const scale = dist > max ? max / dist : 1;
+    const nx = dx * scale;
+    const ny = dy * scale;
+    state.joyDx = nx / max;
+    state.joyDy = ny / max;
+    setKnob(nx, ny);
+  }
+
+  function resetJoystick() {
+    state.joyDx = 0;
+    state.joyDy = 0;
+    setKnob(0, 0);
+  }
+
+  function startFire(e) {
+    if (state.mode !== "playing") return;
+    if (e) e.preventDefault();
+    state.pointerFiring = true;
+    state.fireCooldown = 0;
+    ui.fireButton.classList.add("active");
+  }
+
+  function stopFire(e) {
+    if (e) e.preventDefault();
+    state.pointerFiring = false;
+    if (!state.keyboardFiring) ui.fireButton.classList.remove("active");
+  }
+
+  ui.fireZone.addEventListener("pointerdown", startFire);
+  ui.fireZone.addEventListener("pointerup", stopFire);
+  ui.fireZone.addEventListener("pointercancel", stopFire);
+  ui.fireZone.addEventListener("pointerleave", stopFire);
+
+  ui.joyBase.addEventListener("pointerdown", (e) => {
+    if (state.mode !== "playing") return;
+    e.preventDefault();
+    state.joyActive = true;
+    state.joyPointerId = e.pointerId;
+    updateJoystickGeometry();
+    updateJoystick(e.clientX, e.clientY);
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if (!state.joyActive || state.mode !== "playing") return;
+    if (state.joyPointerId !== null && e.pointerId !== state.joyPointerId) return;
+    e.preventDefault();
+    updateJoystick(e.clientX, e.clientY);
+  }, { passive:false });
+
+  function endJoy(e) {
+    if (!state.joyActive) return;
+    if (e && state.joyPointerId !== null && e.pointerId !== state.joyPointerId) return;
+    state.joyActive = false;
+    state.joyPointerId = null;
+    resetJoystick();
+  }
+
+  window.addEventListener("pointerup", endJoy);
+  window.addEventListener("pointercancel", endJoy);
+
+  window.addEventListener("keydown", (e) => {
+    const key = e.key;
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(key)) e.preventDefault();
+    if (key === "ArrowLeft") state.keyboard.left = true;
+    if (key === "ArrowRight") state.keyboard.right = true;
+    if (key === "ArrowUp") state.keyboard.up = true;
+    if (key === "ArrowDown") state.keyboard.down = true;
+    if (key === " " && !state.keyboardFiring) {
+      state.keyboardFiring = true;
+      state.fireCooldown = 0;
+      ui.fireButton.classList.add("active");
+    }
+  }, { passive:false });
+
+  window.addEventListener("keyup", (e) => {
+    const key = e.key;
+    if (key === "ArrowLeft") state.keyboard.left = false;
+    if (key === "ArrowRight") state.keyboard.right = false;
+    if (key === "ArrowUp") state.keyboard.up = false;
+    if (key === "ArrowDown") state.keyboard.down = false;
+    if (key === " ") {
+      state.keyboardFiring = false;
+      if (!state.pointerFiring) ui.fireButton.classList.remove("active");
+    }
+  });
+
+  window.addEventListener("blur", () => {
+    state.keyboard.left = state.keyboard.right = state.keyboard.up = state.keyboard.down = false;
+    state.keyboardFiring = false;
+    state.pointerFiring = false;
+    ui.fireButton.classList.remove("active");
+    resetJoystick();
+  });
+
+  ui.startBtn.addEventListener("click", startGame);
+  ui.restartBtn.addEventListener("click", startGame);
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", () => setTimeout(resize, 120));
+
+  resize();
+  initShipSelector();
+  renderHallOfFame();
+  updateEffectUI();
+  render();
+})();
+</script>
+</body>
+</html>
